@@ -1,0 +1,14 @@
+{
+  "authors":["username@webhost.net"], // list of committers to collect statistics
+  "branch":"master", // branch on which statistics will be collected
+  "time":{ // time interval
+    "since":"2022-01-01",
+    "until":"2022-07-01"
+  },
+  "projects":["Tag:"], // list of tags in the descriptions of the commits by which they will be distributed among projects
+  "api":"https://gerrit.webhost.net", // path to the root of the Gerrit web interface
+  "auth":{
+    "username":"username", // username with the rights of which the request will be made
+    "password":"abcdefghijklmnopqrstuv/abcdefghijklmnopqrs" // Gerrit one-time password generated at HTTP Credentials section
+  }
+}
