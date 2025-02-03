@@ -1,4 +1,7 @@
-import json, sys, urllib2, base64
+import json
+from sys import stdout
+from base64 import b64encode
+from urllib.request import urlopen, Request
 
 saveName = "gerrit-stats.csv"
 bugTags = ["fix:", "exceptfix:", "exeptfix:", "crashfix:"]
@@ -18,15 +21,15 @@ def loadJson(path):
 
 cfg = loadJson("config.json")
 api = cfg["api"]
-authUsername = cfg["auth"]["username"]
-authPassword = cfg["auth"]["password"]
+authUsername = cfg["auth"]["username"].strip()
+authPassword = cfg["auth"]["password"].strip()
 
 def fetchData(url):
-    request = urllib2.Request(url)
-    base64string = base64.encodestring('%s:%s' % (authUsername, authPassword)).replace('\n', '')
-    request.add_header("Authorization", "Basic %s" % base64string)
-    response = urllib2.urlopen(request)
-    data = response.read().split("\n")[1]
+    request = Request(url)
+    base64string = b64encode(f"{authUsername}:{authPassword}".encode('ascii')).decode('ascii')
+    request.add_header("Authorization", f"Basic {base64string}")
+    response = urlopen(request)
+    data = response.read().decode("utf-8").split("\n")[1]
     return json.loads(data)
 
 projects = cfg["projects"]
@@ -46,25 +49,25 @@ stats = {}
 changesData = {}
 
 def pr(str):
-    sys.stdout.write(str)
+    stdout.write(str)
 
 pr("\nFetching data: [")
 for author in authors:
     pr(".")
     projectsData = {}
     stats[author] = projectsData
-    url = "{u}/a/changes/?q=owner:{a}+status:merged+branch:{b}+since:{ts}+until:{tu}".format(u=api, a=author, b=branch, ts=timeSince, tu=timeUntil)
+    url = f"{api}/a/changes/?q=owner:{author}+status:merged+branch:{branch}+since:{timeSince}+until:{timeUntil}"
     commits = fetchData(url)
     for commit in commits:
         subject = commit["subject"]
         changeId = commit["id"]
         projectId = getProject(subject)
         changesData[changeId] = projectId
-        if not projectsData.has_key(projectId):
+        if projectId not in projectsData:
             projectsData[projectId] = {}
         type = "bug" if isBugfix(subject) else "commit"
         typeData = projectsData[projectId]
-        if not typeData.has_key(type):
+        if type not in typeData:
             typeData[type] = 0
         typeData[type] += 1
 
@@ -76,34 +79,38 @@ for changeId, projectId in changesData.items():
         curDot = 0
     else:
         curDot += 1
-    url = "{u}/a/changes/{c}/comments".format(u=api, c=changeId)
+    url = f"{api}/a/changes/{changeId}/comments"
     changes = fetchData(url)
     for comments in changes.values():
         for comment in comments:
-            if comment.has_key("in_reply_to"):
+            if "in_reply_to" in comment:
                 continue
-            author = comment["author"]["email"]
-            if not stats.has_key(author):
+            username = comment["author"]["username"]
+            if username not in stats:
                 continue
             #message = comment["message"] TODO check messages for significance
-            projectsData = stats[author]
-            if not projectsData.has_key(projectId):
+            projectsData = stats[username]
+            if projectId not in projectsData:
                 projectsData[projectId] = {}
             typeData = projectsData[projectId]
-            if not typeData.has_key("comment"):
+            if "comment" not in typeData:
                 typeData["comment"] = 0
             typeData["comment"] += 1
 
 file = open(saveName, "w")
 for author in authors:
     projectsData = stats[author]
-    file.write("{};commit;bug;comment\n".format(author))
+    file.write(f"{author};commit;bug;comment\n")
     for projectId, statsData in projectsData.items():
         commit = statsData.get("commit", 0)
         bug = statsData.get("bug", 0)
         comment = statsData.get("comment", 0)
-        file.write("{p};{cmt};{bug};{cmn}\n".format(p=projectId, cmt=commit,bug=bug, cmn=comment))
+        file.write(f"{projectId};{commit};{bug};{comment}\n")
     file.write(";;;\n")
 file.close()
 
-pr("]\nFile '{}' has been saved.\n".format(saveName))
+pr(f"]\nFile '{saveName}' has been saved.\n")
+
+
+# TODO split interval to months
+# TODO count rewiewed commits not only commit count
